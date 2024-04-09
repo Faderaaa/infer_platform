@@ -7,12 +7,13 @@ import numpy as np
 from middleware.mycelery import make_celery
 from rtspDemo import RTSCapture
 from utils.DataHandle import DataHandlePool
-from utils.ModelEntity import HailoManage
+from utils.ModelPlatformFactory import ModelPlatformFactory
 from utils.VideoCamera import VideoCamera, gen
 import requests
 
-app = Flask(__name__, static_url_path='/templates', static_folder='templates')
+platformType = "hailo"
 
+app = Flask(__name__, static_url_path='/templates', static_folder='templates')
 # 分布式任务管理器，由于管理后台任务
 celery = make_celery(app)
 
@@ -22,7 +23,7 @@ hrq = Queue()
 
 # 多线程共享Dict，用于流式推理时给计算卡上锁，防止冲突
 manager = Manager()
-streamLock = manager.dict()
+hailoLock = manager.dict()
 
 dataHandle = DataHandlePool()
 
@@ -60,7 +61,7 @@ def video_feed(modelName="default"):
     if modelName == "default":
         modelName = None
     rstpUrl = request.args.get('rstpUrl')
-    if streamLock["isStreamInfer"]:
+    if hailoLock["isStreamInfer"]:
         hmq.put(-1, timeout=30)
     return Response(gen(VideoCamera(rstpUrl), modelName, hmq, hrq, dataHandle),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -96,7 +97,7 @@ def startStream():
 @app.route('/device/stopStream', methods=['GET'])
 def stopStream():
     try:
-        if streamLock["isStreamInfer"]:
+        if hailoLock["isStreamInfer"]:
             hmq.put(-1, timeout=30)
     except Exception:
         return json.dumps({
@@ -116,7 +117,7 @@ def inferSig():
     modelName = request.form.get("modelName")
     file_bytes = upload_file.read()
     frame = np.frombuffer(file_bytes, dtype=np.uint8)
-    if streamLock["isStreamInfer"]:
+    if hailoLock["isStreamInfer"]:
         return {
             "infer_results": "err stream is inprocessing"
         }
@@ -158,8 +159,9 @@ def viewInfer():
 
 
 if __name__ == '__main__':
-    streamLock["isStreamInfer"] = False
+    hailoLock["isStreamInfer"] = False
     # app启动，计算卡管理线程启动
     flas = Process(target=app.run, args=('0.0.0.0',))
     flas.start()
-    HailoManage(hmq, hrq, streamLock)
+    HailoManage = ModelPlatformFactory(platformType)
+    HailoManage(hmq, hrq, hailoLock)

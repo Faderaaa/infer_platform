@@ -1,8 +1,7 @@
 import numpy as np
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams, ConfigureParams,
                             InputVStreamParams, OutputVStreamParams, FormatType,
-                            HailoSchedulingAlgorithm, InputVStreams, OutputVStreams)
-from multiprocessing import Process, Queue
+                            HailoSchedulingAlgorithm)
 
 
 class ModelEntity:
@@ -63,106 +62,7 @@ def inferSigImg(model, frame):
         return infer_results
 
 
-def send(model, sq):
-    """ 向计算卡发送数据(若移植则需要重写此功能)
-            Args：
-                model(ModelEntity): 模型实例
-                sq(Queue): 消息队列，用于接受到图片后转发给计算卡
-    """
-    vstreams_params = InputVStreamParams.make(model.network_group)
-    with InputVStreams(model.network_group, vstreams_params) as vstreams:
-        while True:
-            try:
-                frame = sq.get(False)
-                # image = frame
-                image = np.resize(frame['img'], (1, model.image_height, model.image_width, model.channels))
-                vstream_to_buffer = {vstream: image for vstream in vstreams}
-                for vstream, buff in vstream_to_buffer.items():
-                    vstream.send(buff)
-            except:
-                continue
-
-
-def recv(model, vstreams_params, rq, i):
-    """ 接收计算卡的数据(若移植则需要重写此功能)
-            Args：
-                model(ModelEntity): 模型实例
-                sq(Queue): 消息队列，用于接受到计算卡推理结果后通知给外面的线程
-    """
-    with OutputVStreams(model.network_group, vstreams_params) as vstreams:
-        while True:
-            try:
-                for vstream in vstreams:
-                    data = vstream.recv()
-                rq.put(data)
-            except:
-                break
-
-
-def recv_all(model, rq):
-    vstreams_params_groups = OutputVStreamParams.make_groups(model.network_group)
-    recv_procs = []
-    i = 0
-    q_list = []
-    for vstreams_params in vstreams_params_groups:
-        q_x = Queue()
-        proc = Process(target=recv, args=(model, vstreams_params, q_x, i))
-        proc.start()
-        recv_procs.append(proc)
-        i = i + 1
-    while True:
-        res = []
-        for q in q_list:
-            res.append(q.get())
-        rq.put(np.array(res))
-    # for proc in recv_procs:
-    #     proc.join()
-
-
-def clear_queue(queue):
-    """ 清空队列
-            Args：
-                queue(Queue): 被清空的消息队列
-    """
-    while not queue.empty():
-        queue.get()
-
-
-def streamInfor(model, sendQ, recQ):
-    """ 流式推理，创建一收一发两个线程，然后通过消息队列进行数据转发。
-            Args：
-                model(ModelEntity): 模型实例
-                sendQ(Queue): 消息队列，用于接受到图片后转发给计算卡
-                recQ(Queue): 消息队列，用于接受到计算卡推理结果后通知给外面的线程
-    """
-    s = Queue()
-    r = Queue()
-    send_thread = Process(target=send, args=(model, s), name=model.modelName + "send")
-    rec_thread = Process(target=recv_all, args=(model, r), name=model.modelName + "rec1")
-    # 启动新进程
-    rec_thread.start()
-    send_thread.start()
-    while True:
-        try:
-            fm = sendQ.get(block=True, timeout=30)
-            assert fm != -1
-            s.put(fm)
-            try:
-                res = r.get(False)
-                recQ.put(res)
-            except:
-                pass
-        except:
-            send_thread.terminate()
-            rec_thread.terminate()
-            clear_queue(sendQ)
-            clear_queue(recQ)
-            break
-    clear_queue(recQ)
-    print("out stream")
-
-
-def HailoManage(sendQ, recQ, streamLock):
+def HailoManage(sendQ, recQ, hailoLock):
     """ Hailo计算卡管理线程(若移植则需要重写此功能)
         Args：
             q(Queue): 消息队列，用于和此线程进行数据交互
@@ -177,16 +77,12 @@ def HailoManage(sendQ, recQ, streamLock):
         if lastName != res['modelName']:
             model = ModelEntity("/home/hubu/Documents/hefs/" + res["modelName"], target)  # 实例化模型
             lastName = res["modelName"]
-        if "stream" == res['type']:
-            streamLock["isStreamInfer"] = True
-            with model.network_group.activate(model.network_group_params):
-                streamInfor(model, sendQ, recQ)
-                lastName = ""  # 清空一下模型名称，方便下次推理前重新实例化（否则计算卡驱动会报错出bug，同一个模型不可推理完流式后再单张推理）
-            streamLock["isStreamInfer"] = False
-        else:
+        if "infer" == res['type']:
+            hailoLock["isStreamInfer"] = True
             with model.network_group.activate(model.network_group_params):
                 infer = inferSigImg(model, res["img"])  # 推理
                 recQ.put(infer)  # 传回数据
+            hailoLock["isStreamInfer"] = False
 
 
 if __name__ == '__main__':

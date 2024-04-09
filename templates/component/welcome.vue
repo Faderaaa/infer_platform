@@ -26,7 +26,7 @@ module.exports = {
           label: '原始视频'
         },{
           value: 'yolov5s_bck.hef',
-          label: 'yolov5s'
+          label: 'yolov5s_bck'
         }]
     };
   },
