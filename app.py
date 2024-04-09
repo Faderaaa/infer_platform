@@ -5,9 +5,9 @@ from flask import Flask, request, Response, render_template
 import numpy as np
 
 from middleware.mycelery import make_celery
-from rtspDemo import RTSCapture
 from utils.DataHandle import DataHandlePool
 from utils.ModelPlatformFactory import ModelPlatformFactory
+from utils.RTSCapture import RTSCapture
 from utils.VideoCamera import VideoCamera, gen
 import requests
 
