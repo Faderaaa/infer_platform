@@ -16,7 +16,7 @@ class ModelEntity:
         self.modelName = hef_path
         self.hef = target.load_rknn(hef_path)
         self.target = target
-        self.image_height, self.image_width, self.channels = (256, 256, 3)
+        self.image_height, self.image_width, self.channels = (640, 640, 3)
 
 
 def inferSigImg(model, frame):

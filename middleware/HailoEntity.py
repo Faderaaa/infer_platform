@@ -1,7 +1,14 @@
+import time
+
+import cv2
 import numpy as np
 from hailo_platform import (HEF, VDevice, HailoStreamInterface, InferVStreams, ConfigureParams,
                             InputVStreamParams, OutputVStreamParams, FormatType,
                             HailoSchedulingAlgorithm)
+
+from utils.DataHandle import DataHandlePool
+
+dataHandle = DataHandlePool()
 
 
 class ModelEntity:
@@ -51,7 +58,7 @@ def inferSigImg(model, frame):
             dict: Output tensors of all output layers. The keys are outputs names and the values
             are output data tensors as :obj:`numpy.ndarray` (or list of :obj:`numpy.ndarray` in case of nms output and tf_nms_format=False).
     """
-    image = np.resize(frame, (1, model.image_height, model.image_width, model.channels))
+    image = dataHandle.dataPreprocessing(model.modelName, frame)
     with InferVStreams(model.network_group, model.input_vstreams_params,
                        model.output_vstreams_params) as infer_pipeline:
         input_data = {model.input_vstream_info.name: image}
@@ -59,7 +66,7 @@ def inferSigImg(model, frame):
         res = []
         for output_info in model.modelRes:
             res.append(infer_results[output_info["key"]])
-        return infer_results
+        return dataHandle.analyzeInferResults(model.modelName, res)
 
 
 def HailoManage(sendQ, recQ, hailoLock):
@@ -86,7 +93,11 @@ def HailoManage(sendQ, recQ, hailoLock):
 
 
 if __name__ == '__main__':
-    params = VDevice.create_params()
-    params.scheduling_algorithm = HailoSchedulingAlgorithm.ROUND_ROBIN
     target = VDevice()
-    print("6")
+    model = ModelEntity("/home/hubu/Documents/hefs/yolov5s_bck.hef", target)
+    image = cv2.imread('/home/hubu/Documents/data/yolo_data/bus.jpg')
+    image = cv2.resize(image, dsize=(640, 640), interpolation=cv2.INTER_CUBIC)
+    with model.network_group.activate(model.network_group_params):
+        start = time.time()
+        infer = inferSigImg(model, image)  # 推理
+        print("fps is {}".format(int(1 / (time.time() - start))))

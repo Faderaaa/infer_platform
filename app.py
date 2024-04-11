@@ -127,7 +127,7 @@ def inferSig():
         "type": "infer"
     })
     infer_results = hrq.get()
-    result = dataHandle.analyzeInferResults(modelName, infer_results).tolist()
+    result = infer_results.tolist()
     return {
         "infer_results": str(result)
     }

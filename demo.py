@@ -156,9 +156,10 @@ for i in range(0, len(hef.get_output_vstream_infos())):
     output_vstream = hef.get_output_vstream_infos()[i]
     output_vstream_info.append(output_vstream)
     print(output_vstream.shape)
+    print(output_vstream.name)
 
 # 读取图像
-image = cv2.imread('/home/hubu/Documents/data/COCO2017/val_final/val/000000002157.jpg')
+image = cv2.imread('/home/hubu/Documents/data/yolo_data/test.jpg')
 image = cv2.resize(image, dsize=(640, 640), interpolation=cv2.INTER_CUBIC)
 # 将图像转换为ndarray
 # print(image.shape)

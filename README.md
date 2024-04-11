@@ -3,3 +3,6 @@
 ## 运行
 由于采用了动态载入的方式，所以当需要切换计算卡或者RKNN时，需要在app.py中切换
 platformType即可。若为'hailo'则为'hailo'计算卡，若为'rknn'则为npu计算。
+**后台任务支持需要创建本地redis**。
+## 架构图
+![架构图](./imgs/架构图.png)

@@ -12,6 +12,13 @@ class DataHandle(ABC):
     """
 
     @abstractmethod
+    def dataPreprocessing(self, data: numpy.ndarray) -> numpy.ndarray:
+        """
+        数据预处理
+        """
+        pass
+
+    @abstractmethod
     def analyzeInferResults(self, res) -> numpy.ndarray:
         """
         解析转换模型推理结果
@@ -64,14 +71,24 @@ class DataHandlePool:
 
     def matchObj(self, modelName: str):
         for obj in self.objList:
-            if getattr(obj, 'getModelType')() == modelName:
+            if getattr(obj, 'getModelType')() == modelName.split("/")[-1]:
                 return obj
+        return None
+
+    def dataPreprocessing(self, modelName: str, data: numpy.ndarray) -> numpy.ndarray:
+        """
+        数据预处理
+        """
+        obj = self.matchObj(modelName)
+        assert obj is not None
+        return getattr(obj, 'dataPreprocessing')(data)
 
     def analyzeInferResults(self, modelName: str, res) -> numpy.ndarray:
         """
         解析转换模型推理结果
         """
         obj = self.matchObj(modelName)
+        assert obj is not None
         return getattr(obj, 'analyzeInferResults')(res)
 
     def drawPicture(self, modelName: str, img: numpy.ndarray, inferResults, fps: int) -> numpy.ndarray:
@@ -79,6 +96,7 @@ class DataHandlePool:
         渲染图片
         """
         obj = self.matchObj(modelName)
+        assert obj is not None
         return getattr(obj, 'drawPicture')(img, inferResults, fps)
 
     def reportWarningByInferResults(self, modelName: str, res) -> str:
@@ -86,54 +104,14 @@ class DataHandlePool:
         上报警告，用于在后台任务推理时，处理模型推理结果
         """
         obj = self.matchObj(modelName)
+        assert obj is not None
         return getattr(obj, 'reportWarningByInferResults')(res)
 
 
-class LprnetDataHandle(DataHandle):
-    """
-        实现 Lprnet的DataHandle 接口(Lprnet，车牌识别模型)
-    """
-
-    def analyzeInferResults(self, res) -> numpy.ndarray:
-        """
-        解析转换模型推理结果(仅仅返回解析后的结果，不会绘制进图片中，主要面向内部其他扩展功能使用)
-        """
-        res = res['lprnet/conv31']
-        res = res.tolist()
-        return res
-
-    def getModelType(self) -> str:
-        """
-        获得当前算法的模型名称
-        """
-        return 'lprnet.hef'
-
-    def drawPicture(self, img: numpy.ndarray, inferResults, fps: int) -> numpy.ndarray:
-        """
-        渲染图片（将解析结果绘制到图片中，主要用于展示demo）
-        """
-        print(inferResults)
-        for key in inferResults:
-            cv2.putText(img, "inferResults[0][0][0]:" + str(inferResults[key][0][0][0]), (100, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, (255, 255, 255), 1, cv2.LINE_AA)
-            cv2.putText(img, "fps:" + str(fps), (200, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, (255, 255, 255), 1, cv2.LINE_AA)
-        img = numpy.uint8(img)
-        return img
-
-    def reportWarningByInferResults(self, res) -> str:
-        """
-        上报警告（用于在后台任务推理时，处理模型推理结果）
-        """
-        return "no Thing"
-
-
-class yoloV5sDataHandle(DataHandle):
+class yoloV5sHailoDataHandle(DataHandle):
     """
         实现 yoloV5s的DataHandle 接口(yoloV5)
     """
-
     def __init__(self):
         self.names = ["person"
             , "bicycle"
@@ -229,8 +207,8 @@ class yoloV5sDataHandle(DataHandle):
         bbox = []
         acx = 2
         resList = []
-        for key in inferResults:
-            res = inferResults[key][0]
+        for res in inferResults:
+            # res = inferResults[key][0]
             if res.shape[0] == 40:
                 acx = 1
             if res.shape[0] == 20:
@@ -260,6 +238,10 @@ class yoloV5sDataHandle(DataHandle):
                 resList.append(max_bbox[keyName])
         return resList
 
+    def dataPreprocessing(self, data: numpy.ndarray) -> numpy.ndarray:
+        data = np.resize(data.astype(np.uint8), (1, 640, 640, 3))
+        return data
+
     def analyzeInferResults(self, res) -> numpy.ndarray:
         """
         解析转换模型推理结果(仅仅返回解析后的结果，不会绘制进图片中，主要面向内部其他扩展功能使用)
@@ -277,8 +259,8 @@ class yoloV5sDataHandle(DataHandle):
         """
         渲染图片（将解析结果绘制到图片中，主要用于展示demo）
         """
-        bbox = self.getBox(inferResults)
-        for box in bbox:
+        # bbox = self.getBox(inferResults)
+        for box in inferResults:
             if box[1] > 0.5:
                 img_h = img.shape[0]
                 img_w = img.shape[1]
