@@ -116,7 +116,7 @@ def normalize(data):
 
 # Loading compiled HEFs to device: https://github.com/hailo-ai/hailo_model_zoo/blob/master/hailo_models
 # /vehicle_detection/README.rst model_name = 'yolov5m_vehicles.hef'
-model_name = 'yolov5s.hef'
+model_name = 'yolov5s_7.hef'
 hef_path = '../hefs/{}'.format(model_name)
 print(hef_path)
 hef = HEF(hef_path)
@@ -186,19 +186,19 @@ with InferVStreams(network_group, input_vstreams_params, output_vstreams_params)
             # print("spend time is {}".format(time.time() - start))
             for a in range(0, 3):
                 slice = res_t[:, 85 * a:85 * (a + 1)]
-                res_ids = np.where(sigmoid(slice[:, 4]) > 0.65)[0]
+                res_ids = np.where((slice[:, 4]) > 0.6)[0]
                 # print("spend time is {}".format(time.time() - start))
                 for res_id in res_ids:
                     now = slice[res_id]
                     ids = np.argmax(now[5:])
                     chosen_row = int(res_id / res.shape[0])
                     chosen_col = int(res_id % res.shape[0])
-                    x, y, w, h = sigmoid(now[:4])
+                    x, y, w, h = (now[:4])
                     x = (x * 2.0 - 0.5 + chosen_col) / res.shape[1]
                     y = (y * 2.0 - 0.5 + chosen_row) / res.shape[1]
                     w = (2.0 * w) * (2.0 * w) * anchors[acx][a * 2] / 640
                     h = (2.0 * h) * (2.0 * h) * anchors[acx][a * 2 + 1] / 640
-                    bbox.append((ids, slice[res_id][4], x, y, w, h))
+                    bbox.append((ids, (slice[res_id][4]), x, y, w, h))
 
             # for row in range(0, len(res)):
             #     for col in range(0, len(res[row])):
@@ -244,7 +244,7 @@ with InferVStreams(network_group, input_vstreams_params, output_vstreams_params)
             random_int = random.randint(0, 255)
             # cv2.rectangle(image, (int(x + ), y), (w, h), (0, random_int, 0), 4)
             cv2.rectangle(image, pt1, pt2, (0, random_int, 0), 4)
-            cv2.putText(image, names[box[0]], pt1, cv2.FONT_ITALIC, 2, (0, random_int, 0), 5)
+            cv2.putText(image, names[box[0]] + ":" + str(box[1].item()), pt1, cv2.FONT_ITALIC, 2, (0, random_int, 0), 5)
         # print("spend time is {}".format(time.time() - start))
         cv2.imwrite('/home/hubu/Documents/data/666.jpg', image)
 

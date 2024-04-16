@@ -11,7 +11,8 @@ from utils.RTSCapture import RTSCapture
 from utils.VideoCamera import VideoCamera, gen
 import requests
 
-platformType = "hailo"
+platformType = "onnx"
+fileType = ".onnx"
 
 app = Flask(__name__, static_url_path='/templates', static_folder='templates')
 # 分布式任务管理器，由于管理后台任务
@@ -23,7 +24,7 @@ hrq = Queue()
 
 # 多线程共享Dict，用于流式推理时给计算卡上锁，防止冲突
 manager = Manager()
-hailoLock = manager.dict()
+manageLock = manager.dict()
 
 dataHandle = DataHandlePool()
 
@@ -60,8 +61,10 @@ def backendInfer(modelName, rtsp_url):
 def video_feed(modelName="default"):
     if modelName == "default":
         modelName = None
+    else:
+        modelName = modelName +fileType
     rstpUrl = request.args.get('rstpUrl')
-    if hailoLock["isStreamInfer"]:
+    if manageLock["isStreamInfer"]:
         hmq.put(-1, timeout=30)
     return Response(gen(VideoCamera(rstpUrl), modelName, hmq, hrq, dataHandle),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -97,7 +100,7 @@ def startStream():
 @app.route('/device/stopStream', methods=['GET'])
 def stopStream():
     try:
-        if hailoLock["isStreamInfer"]:
+        if manageLock["isStreamInfer"]:
             hmq.put(-1, timeout=30)
     except Exception:
         return json.dumps({
@@ -117,7 +120,7 @@ def inferSig():
     modelName = request.form.get("modelName")
     file_bytes = upload_file.read()
     frame = np.frombuffer(file_bytes, dtype=np.uint8)
-    if hailoLock["isStreamInfer"]:
+    if manageLock["isStreamInfer"]:
         return {
             "infer_results": "err stream is inprocessing"
         }
@@ -159,9 +162,9 @@ def viewInfer():
 
 
 if __name__ == '__main__':
-    hailoLock["isStreamInfer"] = False
+    manageLock["isStreamInfer"] = False
     # app启动，计算卡管理线程启动
     flas = Process(target=app.run, args=('0.0.0.0',))
     flas.start()
-    HailoManage = ModelPlatformFactory(platformType)
-    HailoManage(hmq, hrq, hailoLock)
+    Manage = ModelPlatformFactory(platformType)
+    Manage(hmq, hrq, manageLock)

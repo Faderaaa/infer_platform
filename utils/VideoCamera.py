@@ -16,7 +16,8 @@ def gen(camera, modelName, q, rec, dataHandle):
 class VideoCamera(object):
     def __init__(self, rtspUrl):
         # 通过opencv获取实时视频流
-        self.video = RTSCapture(rtspUrl)
+        # self.video = RTSCapture(rtspUrl)
+        self.video = cv2.VideoCapture(rtspUrl)
 
     def __del__(self):
         self.video.release()
@@ -24,7 +25,6 @@ class VideoCamera(object):
     def get_frame(self, modelName=None, q=None, rec=None, dataHandle=None):
         start = time.time()
         success, image = self.video.read()
-        image = cv2.resize(image, dsize=(640, 640), interpolation=cv2.INTER_CUBIC)
         if modelName is not None and q is not None:
             q.put({
                 "modelName": modelName,
@@ -33,8 +33,10 @@ class VideoCamera(object):
             }, timeout=30)
             infer_results = rec.get()
             fps = int(1 / (time.time() - start))
-            dataHandle.drawPicture(modelName, image, infer_results, fps)
+            image = dataHandle.drawPicture(modelName, image, infer_results, fps)
         # 因为opencv读取的图片并非jpeg格式，因此要用motion JPEG模式需要先将图片转码成jpg格式图片
         # print(int(1 / (time.time() - start)))
+        bite = image.shape[0] / image.shape[1]
+        image = cv2.resize(image, dsize=(1080, int(1080 * bite)), interpolation=cv2.INTER_CUBIC)
         ret, jpeg = cv2.imencode('.jpg', image)
         return jpeg.tobytes()

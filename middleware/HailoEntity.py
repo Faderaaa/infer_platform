@@ -10,13 +10,12 @@ from utils.DataHandle import DataHandlePool
 
 dataHandle = DataHandlePool()
 
-
 class ModelEntity:
     """ Hailo计算卡所使用的hef模型文件实体类(若移植则需要重写此功能)
     """
 
-    def __init__(self, hef_path, target, input_stream_type=FormatType.AUTO,
-                 output_stream_type=FormatType.AUTO):
+    def __init__(self, hef_path, target, input_stream_type=FormatType.FLOAT32,
+                 output_stream_type=FormatType.FLOAT32):
         """Constructor for the ModelEntity class.
             Args:
                 hef_path (str): 模型文件所在路径
@@ -69,7 +68,7 @@ def inferSigImg(model, frame):
         return dataHandle.analyzeInferResults(model.modelName, res)
 
 
-def HailoManage(sendQ, recQ, hailoLock):
+def Manage(sendQ, recQ, hailoLock):
     """ Hailo计算卡管理线程(若移植则需要重写此功能)
         Args：
             q(Queue): 消息队列，用于和此线程进行数据交互
