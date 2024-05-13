@@ -1,4 +1,5 @@
 import time
+from threading import Thread, Event
 
 import onnx
 import onnxruntime as ort
@@ -264,7 +265,21 @@ class ModelEntity:
         return input_name
 
 
-def inferSigImg(model, frame):
+def inferSigImg(onnx_path, rtspUrl, event):
+    onnx_model = onnx.load(onnx_path)
+    try:
+        onnx.checker.check_model(onnx_model)
+    except Exception:
+        print("Model incorrect")
+    else:
+        print("Model correct")
+    options = ort.SessionOptions()
+    options.enable_profiling = True
+    onnx_session = ort.InferenceSession(onnx_path)
+    video = cv2.VideoCapture(rtspUrl)
+    success, image = video.read()
+
+
     image = dataHandle.dataPreprocessing(model.modelName, frame)
     input_feed = model.get_input_feed(image.astype(np.float32))
     pred = model.onnx_session.run(None, input_feed)[0]
@@ -276,25 +291,21 @@ def Manage(sendQ, recQ, hailoLock):
         Args：
             q(Queue): 消息队列，用于和此线程进行数据交互
     """
-    # 获得计算卡实例
-    lastName = ""
-    # 载入一个默认模型
-    model = ModelEntity("/home/hubu/Documents/hefs/yolov5s.onnx")
+    event = Event()
+    inferRtsp = None
     while True:
         res = sendQ.get()  # 阻塞等待其他线程传来的数据
-        if lastName != res['modelName']:
-            model = ModelEntity("/home/hubu/Documents/hefs/" + res["modelName"])  # 实例化模型
-            lastName = res["modelName"]
-        if "infer" == res['type']:
-            hailoLock["isStreamInfer"] = True
-            infer = inferSigImg(model, res["img"])  # 推理
-            recQ.put(infer)  # 传回数据
-            hailoLock["isStreamInfer"] = False
+        if res["type"] == "startStream":
+            inferRtsp = Thread(target=inferSigImg, args=(res["model"], res["rstpUrl"], event))
+            inferRtsp.start()
+        else:
+            event.set()
+            inferRtsp = None
 
 
 if __name__ == "__main__":
     # onnx_path = 'weights/sim_best20221027.onnx'
-    onnx_path = '/home/hubu/Documents/hefs/yolov5s.onnx'
+    onnx_path = '/home/hubu/Documents/hefs/yolov8s.onnx'
     model = ModelEntity(onnx_path)
     # image = cv2.imread('/home/hubu/Documents/data/yolo_data/bus.jpg')
     # image = cv2.resize(image, dsize=(640, 640), interpolation=cv2.INTER_CUBIC)
@@ -308,10 +319,9 @@ if __name__ == "__main__":
     # img /= 255.0
     # img = np.expand_dims(img, axis=0)  # [3, 640, 640]扩展为[1, 3, 640, 640]
 
-
     start = time.time()
+    print(img.shape)
     infer = inferSigImg(model, img)
-    print(infer.shape)
     outbox = filter_box(infer, 0.5, 0.5)
     print("fps is {}".format(int(1 / (time.time() - start))))
 

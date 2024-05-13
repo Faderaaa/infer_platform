@@ -281,9 +281,9 @@ if __name__ == '__main__':
     # # 流式推理
     # model.inferYoloStream()
 
-    model2 = StreamInfer("yolov5m.hef")
+    model2 = StreamInfer("yolov5s_sigmoid_actived.hef")
     # 流式推理
-    model2.startStreamInfer("rtsp://admin:123456@192.168.31.68:554/ch01.264", haha)
+    model2.startStreamInfer("rtsp://127.0.0.1:8554/chan1/sub/av_stream", haha)
 
     # # 单张推理
     # rtscap = RTSCapture.create("rtsp://admin:123456@192.168.31.68:554/ch01.264")

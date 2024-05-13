@@ -112,6 +112,7 @@ class yoloV5sHailoDataHandle(DataHandle):
     """
         实现 yoloV5s的DataHandle 接口(yoloV5)
     """
+
     def __init__(self):
         self.names = ["person"
             , "bicycle"
@@ -299,6 +300,7 @@ class yoloV5sOnnxDataHandle(DataHandle):
     """
         实现 yoloV5s的DataHandle 接口(yoloV5)
     """
+
     def __init__(self):
         self.names = ["person"
             , "bicycle"
@@ -394,6 +396,7 @@ class yoloV5sOnnxDataHandle(DataHandle):
         y[:, 2] = x[:, 0] + x[:, 2] / 2
         y[:, 3] = x[:, 1] + x[:, 3] / 2
         return y
+
     def nms(self, dets, thresh):
         # dets:x1 y1 x2 y2 score class
         # x[:,n]就是取所有集合的第n个数据
@@ -518,8 +521,210 @@ class yoloV5sOnnxDataHandle(DataHandle):
             scores = inferResults[..., 4]
             classes = inferResults[..., 5].astype(np.int32)
             for box, score, cl in zip(boxes, scores, classes):
-                top, left, right, bottom = box/640
-                top, left, right, bottom = int(top * img.shape[1]), int(left * img.shape[0]),\
+                top, left, right, bottom = box / 640
+                top, left, right, bottom = int(top * img.shape[1]), int(left * img.shape[0]), \
+                                           int(right * img.shape[1]), int(bottom * img.shape[0])
+                cv2.rectangle(img, (top, left), (right, bottom), (255, 0, 0), 2)
+                cv2.putText(img, '{0} {1:.2f}'.format(self.names[cl], score),
+                            (top, left), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.putText(img, str(fps), (100, 100), cv2.FONT_ITALIC, 2, (0, 255, 0), 5)
+        return img
+
+    def reportWarningByInferResults(self, res) -> str:
+        """
+        上报警告（用于在后台任务推理时，处理模型推理结果）
+        """
+        return "no Thing"
+
+
+class yoloV8sOnnxDataHandle(DataHandle):
+    def __init__(self):
+        self.names = ["person"
+            , "bicycle"
+            , "car"
+            , "motorcycle"
+            , "airplane"
+            , "bus"
+            , "train"
+            , "truck"
+            , "boat"
+            , "traffic light"
+            , "fire hydrant"
+            , "stop sign"
+            , "parking meter"
+            , "bench"
+            , "bird"
+            , "cat"
+            , "dog"
+            , "horse"
+            , "sheep"
+            , "cow"
+            , "elephant"
+            , "bear"
+            , "zebra"
+            , "giraffe"
+            , "backpack"
+            , "umbrella"
+            , "handbag"
+            , "tie"
+            , "suitcase"
+            , "frisbee"
+            , "skis"
+            , "snowboard"
+            , "sports ball"
+            , "kite"
+            , "baseball bat"
+            , "baseball glove"
+            , "skateboard"
+            , "surfboard"
+            , "tennis racket"
+            , "bottle"
+            , "wine glass"
+            , "cup"
+            , "fork"
+            , "knife"
+            , "spoon"
+            , "bowl"
+            , "banana"
+            , "apple"
+            , "sandwich"
+            , "orange"
+            , "broccoli"
+            , "carrot"
+            , "hot dog"
+            , "pizza"
+            , "donut"
+            , "cake"
+            , "chair"
+            , "couch"
+            , "potted plant"
+            , "bed"
+            , "dining table"
+            , "toilet"
+            , "tv"
+            , "laptop"
+            , "mouse"
+            , "remote"
+            , "keyboard"
+            , "cell phone"
+            , "microwave"
+            , "oven"
+            , "toaster"
+            , "sink"
+            , "refrigerator"
+            , "book"
+            , "clock"
+            , "vase"
+            , "scissors"
+            , "teddy bear"
+            , "hair drier"
+            , "toothbrush"]
+
+    def dataPreprocessing(self, data: numpy.ndarray) -> numpy.ndarray:
+        if data.shape[-1] != 640:
+            data = cv2.resize(data, dsize=(640, 640), interpolation=cv2.INTER_CUBIC)
+        img = data[:, :, ::-1].transpose(2, 0, 1)  # BGR2RGB和HWC2CHW
+        img = img.astype(dtype=np.float32)  # onnx模型的类型是type: float32[ , , , ]
+        img /= 255.0
+        img = np.expand_dims(img, axis=0)  # [3, 640, 640]扩展为[1, 3, 640, 640]
+        return img
+
+    def postprocess(self, output):
+        """
+        Performs post-processing on the model's output to extract bounding boxes, scores, and class IDs.
+
+        Args:
+            output (numpy.ndarray): The output of the model.
+
+        Returns:
+            numpy.ndarray: The input image with detections drawn on it.
+        """
+
+        # Transpose and squeeze the output to match the expected shape
+        outputs = np.transpose(np.squeeze(output[0]))
+
+        # Get the number of rows in the outputs array
+        rows = outputs.shape[0]
+
+        # Lists to store the bounding boxes, scores, and class IDs of the detections
+        boxes = []
+        scores = []
+        class_ids = []
+
+        # Calculate the scaling factors for the bounding box coordinates
+        x_factor = 1
+        y_factor = 1
+
+        # Iterate over each row in the outputs array
+        for i in range(rows):
+            # Extract the class scores from the current row
+            classes_scores = outputs[i][4:]
+
+            # Find the maximum score among the class scores
+            max_score = np.amax(classes_scores)
+
+            # If the maximum score is above the confidence threshold
+            if max_score >= 0.5:
+                # Get the class ID with the highest score
+                class_id = np.argmax(classes_scores)
+
+                # Extract the bounding box coordinates from the current row
+                x, y, w, h = outputs[i][0], outputs[i][1], outputs[i][2], outputs[i][3]
+
+                # Calculate the scaled coordinates of the bounding box
+                left = int((x - w / 2) * x_factor)
+                top = int((y - h / 2) * y_factor)
+                width = int(w * x_factor)
+                height = int(h * y_factor)
+
+                # Add the class ID, score, and box coordinates to the respective lists
+                class_ids.append(class_id)
+                scores.append(max_score)
+                boxes.append([left, top, width, height])
+
+        # Apply non-maximum suppression to filter out overlapping bounding boxes
+        indices = cv2.dnn.NMSBoxes(boxes, scores, 0.5, 0.5)
+
+        resList = []
+        # Iterate over the selected indices after non-maximum suppression
+        for i in indices:
+            # Get the box, score, and class ID corresponding to the index
+            box = boxes[i]
+            score = scores[i]
+            class_id = class_ids[i]
+            box.append(score)
+            box.append(class_id)
+            resList.append(box)
+            # Draw the detection on the input image
+            # self.draw_detections(input_image, box, score, class_id)
+
+        # Return the modified input image
+        return resList
+
+    def analyzeInferResults(self, res) -> numpy.ndarray:
+        """
+        解析转换模型推理结果(仅仅返回解析后的结果，不会绘制进图片中，主要面向内部其他扩展功能使用)
+        """
+        res = self.postprocess(res)
+        return np.array(res)
+
+    def getModelType(self) -> str:
+        """
+        获得当前算法的模型名称
+        """
+        return 'yolov8s.onnx'
+
+    def drawPicture(self, img: numpy.ndarray, inferResults, fps: int) -> numpy.ndarray:
+        """
+        渲染图片（将解析结果绘制到图片中，主要用于展示demo）
+        """
+        if inferResults.shape[0] != 0:
+            boxes = inferResults[..., :4].astype(np.int32)  # x1 x2 y1 y2
+            scores = inferResults[..., 4]
+            classes = inferResults[..., 5].astype(np.int32)
+            for box, score, cl in zip(boxes, scores, classes):
+                top, left, right, bottom = box / 640
+                top, left, right, bottom = int(top * img.shape[1]), int(left * img.shape[0]), \
                                            int(right * img.shape[1]), int(bottom * img.shape[0])
                 cv2.rectangle(img, (top, left), (right, bottom), (255, 0, 0), 2)
                 cv2.putText(img, '{0} {1:.2f}'.format(self.names[cl], score),
