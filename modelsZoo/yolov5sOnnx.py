@@ -192,7 +192,7 @@ def imgStreamInfer(model_path, rtspUrl, event):
     rtscap = cv2.VideoCapture(rtspUrl)
     width = int(rtscap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(rtscap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    rtsp_p = rtspUrl + "/" + str(0)
+    rtsp_p = str(0)
     push = RTSPPush(width, height, rtsp_p)
     while not event.is_set():
         success, image = rtscap.read()
@@ -210,7 +210,12 @@ def Manage(sendQ):
     inferRtsp = None
     while True:
         res = sendQ.get()  # 阻塞等待其他线程传来的数据
-        if res["type"] == "startStream" and inferRtsp is None:
+        if res["type"] == "startStream":
+            if inferRtsp is not None:
+                event.set()
+                inferRtsp.join()
+                inferRtsp = None
+                event.clear()
             inferRtsp = Process(target=imgStreamInfer, args=(res["modelName"], res["rstpUrl"], event))
             inferRtsp.start()
         elif res["type"] == "stopStream" and inferRtsp is not None:

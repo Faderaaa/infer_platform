@@ -121,7 +121,7 @@ class InferModel:
 
     def startStreamInfer(self, rtspUrl, event):
         def send(configured_network, event):
-            configured_network.wait_for_activation(500)
+            configured_network.wait_for_activation(1000)
             vstreams_params = InputVStreamParams.make(configured_network)
             with InputVStreams(configured_network, vstreams_params) as vstreams:
                 rtscap = cv2.VideoCapture(rtspUrl)
@@ -142,11 +142,11 @@ class InferModel:
                     rtscap.release()
 
         def recv(configured_network, vstreams_params, event, nums):
-            configured_network.wait_for_activation(500)
+            configured_network.wait_for_activation(1000)
             rtscap = cv2.VideoCapture(rtspUrl)
             width = int(rtscap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(rtscap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            rtsp_p = rtspUrl + "/" + str(nums)
+            rtsp_p = str(nums)
             push = RTSPPush(width, height, rtsp_p)
 
             with OutputVStreams(configured_network, vstreams_params) as vstreams:
@@ -157,7 +157,10 @@ class InferModel:
                             data = vstream.recv()
                             data = data / 255.0
                             boxs = self.getBox(data)
-                            rec = self.drawPicture(image, boxs)
+                            if success:
+                                rec = self.drawPicture(image, boxs)
+                            else:
+                                continue
                             push.pushData(rec)
                 except HailoRTTimeout:
                     push.relace()
@@ -195,7 +198,12 @@ def Manage(sendQ):
     inferRtsp = None
     while True:
         res = sendQ.get()  # 阻塞等待其他线程传来的数据
-        if res["type"] == "startStream" and inferRtsp is None:
+        if res["type"] == "startStream":
+            if inferRtsp is not None:
+                event.set()
+                inferRtsp.join()
+                inferRtsp = None
+                event.clear()
             inferRtsp = Process(target=imgStreamInfer, args=(res["modelName"], res["rstpUrl"], event))
             inferRtsp.start()
         elif res["type"] == "stopStream" and inferRtsp is not None:

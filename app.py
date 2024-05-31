@@ -3,7 +3,7 @@ from multiprocessing import Process, Queue
 from flask import Flask, request, render_template
 from utils.ModelPlatformFactory import ModelPlatformFactory
 
-modelType = "yolov5sOnnx"
+modelType = "yolov5sHailo"
 
 app = Flask(__name__, static_url_path='/templates', static_folder='templates')
 

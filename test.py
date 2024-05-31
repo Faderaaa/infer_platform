@@ -3,10 +3,7 @@ import time
 import cv2
 import numpy as np
 import requests
-
-from utils.DataHandle import DataHandlePool
-
-dataHandle = DataHandlePool()
+from multiprocessing import Process
 
 
 def sigmoid(x):
@@ -93,36 +90,48 @@ def infer():
 
 def startStream():
     params = {
-        "modelName": "/home/hubu/Documents/hefs/yolov5s.onnx",
-        # "rstpUrl": "rtsp://admin:123456@192.168.31.68:554/ch01.264"
-        "rstpUrl": "rtsp://127.0.0.1:8554/chan1/sub/av_stream"
+        "modelName": "/home/hubu/Documents/hefs/yolov5s_sigmoid_actived.hef",
+        "rstpUrl": "rtsp://admin:123456@192.168.31.68:554/ch01.264"
+        # "rstpUrl": "rtmp://127.0.0.1:1935/cam/test"
     }
     res = requests.post(url="http://127.0.0.1:5000/device/startStream", data=params)
     print(res.text)
     return res
+
 
 def stopStream():
     res = requests.get(url="http://127.0.0.1:5000/device/stopStream")
     print(res.text)
     return res
 
-def showRtsp():
-    cap = cv2.VideoCapture("rtsp://127.0.0.1:8554/chan1/sub/av_stream/0")
-    ret, frame = cap.read()
-    while ret:
+
+def showRtsp(num):
+    cap = cv2.VideoCapture("rtsp://127.0.0.1:8554/res/" + str(num))
+    while True:
         ret, frame = cap.read()
-        cv2.imshow("frame", frame)
-        if cv2.waitKey(25) & 0xFF == ord('q'):
-            break
+        if ret:
+            cv2.imshow("frame", frame)
+            if cv2.waitKey(25) & 0xFF == ord('q'):
+                break
     cv2.destroyAllWindows()
     cap.release()
 
+def show():
+    s1 = Process(target=showRtsp, args=(0, ))
+    # s2 = Process(target=showRtsp, args=(1,))
+    # s3 = Process(target=showRtsp, args=(2,))
+    s1.start()
+    # s2.start()
+    # s3.start()
+    s1.join()
+    # s2.join()
+    # s3.join()
 
 if __name__ == '__main__':
-    # showRtsp()
-    startStream()
-    time.sleep(20)
-    stopStream()
+    show()
+    # startStream()
+    # time.sleep(20)
+    # stopStream()
     # time.sleep(20)
     # startStream()
     # time.sleep(20)

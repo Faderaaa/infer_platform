@@ -29,7 +29,7 @@ IMAGES_TO_VISUALIZE = 5
 def preDataset():
     # First, we will prepare the calibration set. Resize the images to the correct size and crop them.
     from tensorflow.python.eager.context import eager_mode
-    def preproc(image, output_height=640, output_width=640, resize_side=640):
+    def preproc(image, output_height=160, output_width=160, resize_side=160):
         ''' imagenet-standard: aspect-preserving resize to 256px smaller-side, then central-crop to 224px'''
         with eager_mode():
             h, w = image.shape[0], image.shape[1]
@@ -43,7 +43,7 @@ def preDataset():
     images_list = [img_name for img_name in os.listdir(images_path) if
                    os.path.splitext(img_name)[1] == '.jpg']
 
-    calib_dataset = np.zeros((len(images_list), 640, 640, 3))
+    calib_dataset = np.zeros((len(images_list), 160, 160, 3))
     for idx, img_name in enumerate(sorted(images_list)):
         img = np.array(Image.open(os.path.join(images_path, img_name)))
         img_preproc = preproc(img)
@@ -54,14 +54,14 @@ def preDataset():
 
 
 if __name__ == '__main__':
-    onnx_model_name = 'yolov8s'
-    onnx_path = '/home/hubu/Documents/hefs/yolov8s.onnx'
+    onnx_model_name = 'facenet_mobilenet'
+    onnx_path = '/home/hubu/Documents/hefs/facenet_mobilenet.onnx'
     chosen_hw_arch = 'hailo8'
     runner = ClientRunner(hw_arch=chosen_hw_arch)
     runner.translate_onnx_model(onnx_path, onnx_model_name,
-                                start_node_names=['images'],
-                                end_node_names=['/model.22/Concat_3'],
-                                net_input_shapes={'images': [1, 3, 640, 640]})
+                                start_node_names=["input.1"],
+                                end_node_names=['/last_bn/BatchNormalization'],
+                                net_input_shapes={'input.1': [1, 3, 160, 160]})
 
     calib_dataset = preDataset()
 

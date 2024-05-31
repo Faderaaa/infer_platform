@@ -5,7 +5,7 @@ import numpy
 
 class RTSPPush:
     def __init__(self, width, height, pushUrl):
-        rtsp_p = pushUrl
+        rtsp_p = "rtsp://127.0.0.1:8554/res/" + pushUrl
         command = ['ffmpeg',
                    '-y', '-an',
                    '-re',
