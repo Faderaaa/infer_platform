@@ -13,7 +13,7 @@ from hailo_platform.pyhailort.pyhailort import HailoRTTimeout, InferVStreams
 
 from utils.RTSPPush import RTSPPush
 
-myFace = np.load('/home/hubu/Documents/hefs/myFaceF1.npy')
+myFace = np.load('/home/hubu/Documents/hefs/myFaceF.npy')
 
 class FaceFModel:
     def __init__(self, model_path, target):
@@ -123,7 +123,7 @@ class InferModel:
             if box[0] not in max_bbox.keys() or box[1] > max_bbox[box[0]][1]:
                 max_bbox[box[0]] = box
         for keyName in max_bbox:
-            resList.append(max_bbox[keyName])
+            resList.append(list(max_bbox[keyName]))
         return resList
 
     def drawPicture(self, img: np.ndarray, inferResults) -> np.ndarray:
@@ -131,22 +131,21 @@ class InferModel:
         渲染图片（将解析结果绘制到图片中，主要用于展示demo）
         """
         for box in inferResults:
-            cl = box[1]
-            box = box[0]
-            cos = box[2]
-            if box[1] > 0.5:
+            if box[2] > 0.5:
+                cl = box[0]
+                cos = box[1]
                 img_h = img.shape[0]
                 img_w = img.shape[1]
-                x = box[2] * img_w
-                y = box[3] * img_h
-                w = box[4] * img_w
-                h = box[5] * img_h
+                x = box[3] * img_w
+                y = box[4] * img_h
+                w = box[5] * img_w
+                h = box[6] * img_h
                 # 左上
                 pt1 = (int(x - w / 2), int(y - h / 2))
                 # 右下
                 pt2 = (int(x + w / 2), int(y + h / 2))
 
-                score = box[1].item()
+                score = box[2].item()
                 cv2.rectangle(img, pt1, pt2, (255, 0, 0), 2)
                 cv2.putText(img, '{0} face:{1:.2f}, person:{2:.2f}'.format(self.names[cl], score, cos),
                             pt1, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
@@ -201,12 +200,12 @@ class InferModel:
             res = self.getFaceImg(frame, modelRes)
             f = faceFModel.inferData(res)
             for i, face in enumerate(f):
-                cos = self.numpy_cos(face, myFace)
-                if cos > 0.5:
-                    cl = 0
-                else:
-                    cl = 1
-                faceRes.append((modelRes[i], cl, cos))
+                np.save("/home/hubu/Documents/hefs/myFaceF.npy", face)
+                modelRes[i][0] = 1
+                modelRes[i].insert(1, self.numpy_cos(face, myFace))
+                if modelRes[i][1] > 0.6:
+                    modelRes[i][0] = 0
+                faceRes.append(modelRes[i])
         modelRes = self.drawPicture(frame, faceRes)
         return modelRes
 
@@ -214,7 +213,7 @@ class InferModel:
 def imgStreamInfer(model_path, rtspUrl, event):
     target = VDevice()
     model = InferModel(model_path, target)
-    faceFModel = FaceFModel("/home/hubu/Documents/hefs/facenet_mobilenet_my.hef", target)
+    faceFModel = FaceFModel("/home/hubu/Documents/hefs/facenet_mobilenet1.hef", target)
     rtscap = cv2.VideoCapture(rtspUrl)
     width = int(rtscap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(rtscap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -222,8 +221,9 @@ def imgStreamInfer(model_path, rtspUrl, event):
     push = RTSPPush(width, height, rtsp_p)
     while not event.is_set():
         success, image = rtscap.read()
-        resImage = model.inferData(image, faceFModel)
-        push.pushData(resImage)
+        if success:
+            resImage = model.inferData(image, faceFModel)
+            push.pushData(resImage)
     rtscap.release()
 
 
