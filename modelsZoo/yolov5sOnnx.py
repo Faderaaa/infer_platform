@@ -1,12 +1,9 @@
-import time
-from multiprocessing import Process, Event
 import onnx
 import onnxruntime as ort
 import cv2
 import numpy as np
 
 from utils.RTSPPush import RTSPPush
-
 
 class InferModel:
     def __init__(self, model_path):
@@ -186,44 +183,20 @@ class InferModel:
         return modelRes
 
 
-def imgStreamInfer(model_path, rtspUrl, event):
+def imgStreamInfer(model_path, rtsp_url, waring_url, res_rtsp_url, event):
     model = InferModel(model_path)
-    # print(rtspUrl)
-    rtscap = cv2.VideoCapture(rtspUrl)
+    rtscap = cv2.VideoCapture(rtsp_url)
     width = int(rtscap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(rtscap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    rtsp_p = str(0)
-    push = RTSPPush(width, height, rtsp_p)
+    push = None
+    if res_rtsp_url != "":
+        push = RTSPPush(width, height, res_rtsp_url)
     while not event.is_set():
         success, image = rtscap.read()
         img = model.inferData(image)
-        push.pushData(img)
+        if push is not None:
+            push.pushData(img)
     rtscap.release()
 
-
-def Manage(sendQ):
-    """ Hailo计算卡管理线程(若移植则需要重写此功能)
-        Args：
-            q(Queue): 消息队列，用于和此线程进行数据交互
-    """
-    event = Event()
-    inferRtsp = None
-    while True:
-        res = sendQ.get()  # 阻塞等待其他线程传来的数据
-        if res["type"] == "startStream":
-            if inferRtsp is not None:
-                event.set()
-                inferRtsp.join()
-                inferRtsp = None
-                event.clear()
-            inferRtsp = Process(target=imgStreamInfer, args=(res["modelName"], res["rstpUrl"], event))
-            inferRtsp.start()
-        elif res["type"] == "stopStream" and inferRtsp is not None:
-            event.set()
-            inferRtsp.join()
-            inferRtsp = None
-            event.clear()
-
-
 if __name__ == "__main__":
-    onnx_path = 'weights/sim_best20221027.onnx'
+    onnx_path = 'weights/yolov8s.onnx'
